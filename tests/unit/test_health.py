@@ -1,27 +1,31 @@
 """Tests for the Redis probe in api/routes/health.py."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+from api.routes.health import health_check
 
 
 @pytest.mark.unit
 class TestHealthRedisProbe:
     """Test suite for the Redis health probe's client construction."""
 
-    def test_redis_client_built_from_redis_url(self):
-        """The probe must build its client from settings.redis_url, not
-        the nonexistent redis_host/redis_port fields (issue #62)."""
+    @pytest.mark.asyncio
+    async def test_health_check_reports_redis_healthy_via_redis_url(self):
+        """health_check() must build its Redis client from settings.redis_url,
+        not the nonexistent redis_host/redis_port fields (issue #62)."""
         from core.config import settings
+
+        mock_db = MagicMock()
+        mock_db.execute = AsyncMock(return_value=None)
 
         with patch("redis.Redis.from_url") as mock_from_url:
             mock_from_url.return_value = MagicMock(ping=MagicMock(return_value=True))
 
-            import redis
+            result = await health_check(db=mock_db)
 
-            r = redis.Redis.from_url(settings.redis_url, decode_responses=True)
-            r.ping()
-
+            assert result["dependencies"]["redis"] == "healthy"
             mock_from_url.assert_called_once_with(settings.redis_url, decode_responses=True)
 
     def test_redis_url_setting_exists(self):
